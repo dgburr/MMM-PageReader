@@ -8,11 +8,11 @@
 Module.register("MMM-PageReader", {
     defaults: {
         highlight: 'background-color:red;', // CSS to be applied to highlighted sentences
-        width: "100%",
-        height: "100%",
-        top: "0",
-        left: "0",
-        timeout: 1000, // amount of time to wait before moving to the next sentence.  If set to 0, waits for a PAGE_READ_NEXT event
+        width: "100%",  // width of page reading window (px or %)
+        height: "100%", // height of page reading window (px or %)
+        left: "0",      // X position of page reading window (px)
+        top: "0",       // Y position of page reading window (px)
+        timeout: 1000,  // amount of time (in ms) to wait before moving to the next sentence.  If set to 0, waits for a PAGE_READER_NEXT event
         notification: null, // if defined, a notification with this name (and payload containing text) will be sent for each sentence
     },
 
@@ -21,20 +21,35 @@ Module.register("MMM-PageReader", {
     },
 
    start: function() {
+        this.paused = false
         this.current_span_index = 0
         this.spans = null
+        this.timeout = null
     },
 
-    notificationReceived: function(noti, payload, sender) {
-        switch(noti) {
+    notificationReceived: function(notification, payload, sender) {
+        switch(notification) {
             case "DOM_OBJECTS_CREATED":
                 this.prepareWindow()
                 break
-            case "PAGE_READ_LOAD":
+            case "PAGE_READER_LOAD":
                 this.sendSocketNotification("PROXY_URL", payload)
                 break
-            case "PAGE_READ_NEXT":
+            case "PAGE_READER_NEXT":
                 this.nextSentence()
+                break
+            case "PAGE_READER_STOP":
+                this.closeWindow()
+                break
+            case "PAGE_READER_PAUSE":
+                if(this.timeout) clearTimeout(this.timeout)
+                this.paused = true
+                break
+            case "PAGE_READER_RESUME":
+                if(this.paused) {
+                    this.paused = false
+                    this.nextSentence()
+                }
                 break
         }
     },
@@ -89,6 +104,7 @@ Module.register("MMM-PageReader", {
     },
 
     closeWindow: function() {
+        if(this.timeout) clearTimeout(this.timeout)
         var reader = document.getElementById("PAGE_READER")
         reader.closeMyself()
         var iframe = document.getElementById("PAGE_READER_IFRAME")
@@ -148,7 +164,9 @@ Module.register("MMM-PageReader", {
         }
 
         if(this.config.notification) {
-            this.sendNotification(this.config.notification, this.spans[this.current_span_index].innerHTML)
+            var text = this.spans[this.current_span_index].innerHTML
+            text = text.replace("&nbsp;", ' ')
+            this.sendNotification(this.config.notification, text)
         }
 
         this.spans[this.current_span_index].setAttribute("class", "highlight") 
@@ -157,13 +175,15 @@ Module.register("MMM-PageReader", {
         iframe.contentWindow.scrollTo(0, pos.y)
 
         if(this.config.timeout > 0) {
-            setTimeout(()=>{
+            this.timeout = setTimeout(()=>{
                 this.nextSentence()
             }, this.config.timeout)
         }
     },
 
     nextSentence: function() {
+        if(this.paused) return
+
         this.spans[this.current_span_index].removeAttribute("class")
         this.current_span_index++
         this.highlightSentence()
