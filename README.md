@@ -54,10 +54,11 @@ Default configuration:
 ## Notifications
 `MMM-PageReader` listens for the following notifications:
 
-* `PAGE_READER_LOAD`: payload specifies a URL to load and display
-* `PAGE_READER_NEXT`: highlight the next sentence (or close the window if the last sentence is currently being displayed)
-* `PAGE_READER_STOP`: close the window if currently displayed
-* `PAGE_READER_PAUSE`: pause reading
+* `PAGE_READER_LOAD`: payload specifies a URL to load and display.
+* `PAGE_READER_NEXT`: highlight the next sentence or close the window if the last sentence is currently being displayed.  Optional payload specifies number of sentences to skip forwards.
+* `PAGE_READER_PREVIOUS`: highlight the previous sentence.  Optional payload specifies the number of sentences to skip backwards.
+* `PAGE_READER_STOP`: close the window if currently displayed.
+* `PAGE_READER_PAUSE`: pause reading.
 * `PAGE_READER_RESUME`: resume reading
 
 If the `notification` option is set in the configuration, then `MMM-PageReader` will send a notification of this type for each sentence, with the payload corresponding to the sentence text.

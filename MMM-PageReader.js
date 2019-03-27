@@ -36,7 +36,10 @@ Module.register("MMM-PageReader", {
                 this.sendSocketNotification("PROXY_URL", payload)
                 break
             case "PAGE_READER_NEXT":
-                this.nextSentence()
+                this.nextSentence(payload? payload: 1)
+                break
+            case "PAGE_READER_PREVIOUS":
+                this.prevSentence(payload? payload: 1)
                 break
             case "PAGE_READER_STOP":
                 this.closeWindow()
@@ -181,11 +184,18 @@ Module.register("MMM-PageReader", {
         }
     },
 
-    nextSentence: function() {
+    nextSentence: function(step = 1) {
         if(this.paused) return
 
         this.spans[this.current_span_index].removeAttribute("class")
-        this.current_span_index++
+        this.current_span_index += step
+        this.highlightSentence()
+    },
+
+    prevSentence: function(step = 1) {
+        this.spans[this.current_span_index].removeAttribute("class")
+        this.current_span_index -= step
+        if(this.current_span_index < 0) this.current_span_index = 0
         this.highlightSentence()
     },
 
