@@ -22,6 +22,8 @@ Default configuration:
         top: "0",       // Y position of page reading window (px)
         timeout: 1000,  // amount of time (in ms) to wait before moving to the next sentence.  If set to 0, waits for a PAGE_READER_NEXT event
         notification: null, // if defined, a notification with this name (and payload containing text) will be sent for each sentence
+        transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
+        },
     },
 }
 ```
@@ -62,3 +64,14 @@ Default configuration:
 * `PAGE_READER_RESUME`: resume reading
 
 If the `notification` option is set in the configuration, then `MMM-PageReader` will send a notification of this type for each sentence, with the payload corresponding to the sentence text.
+
+## HTML Transformation
+This functionality is useful in case the source URL shows some kind of popup which you wish to hide.  For example, to higde the element 'annoying-popup':
+
+```javascript
+config: {
+    transform: (url, doc) => {
+        doc.getElementsByClassName("annoying-popup")[0].style.display = 'none'
+    }
+}
+```

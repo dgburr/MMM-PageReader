@@ -14,6 +14,8 @@ Module.register("MMM-PageReader", {
         top: "0",       // Y position of page reading window (px)
         timeout: 1000,  // amount of time (in ms) to wait before moving to the next sentence.  If set to 0, waits for a PAGE_READER_NEXT event
         notification: null, // if defined, a notification with this name (and payload containing text) will be sent for each sentence
+        transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
+        },
     },
 
     getStyles: function() {
@@ -74,13 +76,28 @@ Module.register("MMM-PageReader", {
         iframe.src = url
         iframe.onload = function() {
             var doc = iframe.contentDocument || iframe.contentWindow.document
+
+            // add style to apply as highlight
             var style = document.createElement('style')
             style.type = 'text/css'
             style.innerHTML = 'span.highlight {' + self.config.highlight + '}'
             doc.head.appendChild(style)
+
+            // execute (optional) HTML transformation
+            if(self.config.transform && typeof self.config.transform == "function") {
+                try {
+                    self.config.transform(url, doc)
+                } catch(e) {
+                    this.log("Transform failed: " + e)
+                }
+            }
+
+            // wrap sentences in spans of class 'MMM-wrapped-text'
             self.parseSentences(doc)
+            // get results of parse
             self.current_span_index = 0
             self.spans = doc.querySelectorAll('span.MMM-wrapped-text')
+            // start highlighting
             self.highlightSentence()
         }
         var reader = document.getElementById("PAGE_READER")
