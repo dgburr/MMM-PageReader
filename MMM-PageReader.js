@@ -93,6 +93,7 @@ Module.register("MMM-PageReader", {
         reader.closeMyself()
         var iframe = document.getElementById("PAGE_READER_IFRAME")
         iframe.src = null
+        iframe.onload = null
         this.start()
     },
 
@@ -108,19 +109,27 @@ Module.register("MMM-PageReader", {
             this.log("No paragraphs")
             return
         }
-
         var count = 0
         for(var i = 0; i < paragraphs.length; i++) {
-            // Split at sentence boundaries
-            var arr = paragraphs[i].textContent.split(".")
-            // Generate spans for each sentence
-            for(var j = 0; j < arr.length; j++) {
-                if(arr[j].length > 0) {
-                    count++
-                    arr[j] = "<span class='MMM-wrapped-text'>" + arr[j] + "</span>"
+            var text = paragraphs[i].textContent.trim()
+            var result = []
+            function add(sentence) {
+                result += "<span class='MMM-wrapped-text'>" + sentence + "</span>"
+                count++
+            }
+
+            while(1) {
+                var s = text.match(/[^\.?!]*[\.?!]["”']?/)
+                if(!s) {
+                    if(text.trim().length > 0) add(text)
+                    break
+                } else {
+                    add(s[0])
+                    text = text.substr(s[0].length, text.length)
                 }
             }
-            paragraphs[i].innerHTML = arr.join(".")
+
+            paragraphs[i].innerHTML = result
         }
 
         this.log("Parsed " + count + " sentences")
@@ -173,4 +182,5 @@ Module.register("MMM-PageReader", {
     log: function(msg) {
         this.sendSocketNotification("LOG", msg)
     }
+
 })
