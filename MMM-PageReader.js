@@ -18,7 +18,7 @@ Module.register("MMM-PageReader", {
         },
         html: {
             tags: [ 'p', 'h1', 'h2', 'h3', 'h4', 'li' ], // list of tags to parse sentences from
-            regions: (url) => { // return a list of regions to parse sentences from
+            regions: (url) => { // a list of query selectors to parse sentences from
                 return null // parse all regions
             },
             transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
@@ -79,11 +79,8 @@ Module.register("MMM-PageReader", {
 
     socketNotificationReceived: function(noti, payload) {
         if(noti == "PROXIED_URL") {
-            var dialog = document.getElementById("PAGE_READER_DIALOG")
-            dialog.style.display = "block"
-
-            var dialog_msg = document.getElementById("PAGE_READER_DIALOG_MSG")
-            dialog_msg.innerHTML = "Loading " + payload
+            this.dialog_box.style.display = "block"
+            this.setDialogMsg("Loading " + payload)
 
             this.displayWindow(payload)
         }
@@ -91,11 +88,7 @@ Module.register("MMM-PageReader", {
 
     displayWindow: function(url) {
         var self = this
-
-        var iframe = document.getElementById("PAGE_READER_IFRAME")
-        var reader = document.getElementById("PAGE_READER")
-        var dialog = document.getElementById("PAGE_READER_DIALOG")
-        var dialog_msg = document.getElementById("PAGE_READER_DIALOG_MSG")
+        var iframe = this.page_reader_iframe
 
         iframe.src = url
         iframe.onload = function() {
@@ -109,7 +102,7 @@ Module.register("MMM-PageReader", {
 
             // execute (optional) HTML transformation
             if(self.config.html.transform && typeof self.config.html.transform == "function") {
-                dialog_msg.innerHTML = "Applying transform"
+                self.setDialogMsg("Applying HTML transformation")
                 try {
                     self.config.html.transform(url, doc)
                 } catch(e) {
@@ -118,31 +111,22 @@ Module.register("MMM-PageReader", {
             }
 
             // determine list of regions to parse
-            var regions = [ doc ]
+            var regions = []
             if(self.config.html.regions && typeof self.config.html.regions == "function") {
-                dialog_msg.innerHTML = "Finding regions"
                 try {
-                    var list = self.config.html.regions(url)
-                    if(list) {
-                        regions = []
-                        list.forEach(region => {
-                            var node = doc.getElementsByClassName(region)
-                            if(node) regions.push(node)
-                        })
-                    }
+                    regions = self.config.html.regions(url)
                 } catch(e) {
-                    self.log("Regions failed: " + e)
+                    self.log("Failed to get regions: " + e)
                 }
             }
 
-            var msg = "Got " + regions.length + " regions: " + regions
-            dialog_msg.innerHTML = msg
-            self.log(msg)
+            if(regions.length == 0) regions.push('')
 
-            // wrap sentences in spans of class 'MMM-wrapped-text'
+            // parse sentences
+            self.setDialogMsg("Parsing sentences")
             regions.forEach(region => {
                 self.config.html.tags.forEach(tag => {
-                    self.parseSentences(region, tag)
+                    self.parseSentences(doc.querySelectorAll(`${region} ${tag}`))
                 })
             })
 
@@ -151,47 +135,59 @@ Module.register("MMM-PageReader", {
             self.spans = doc.querySelectorAll('span.MMM-wrapped-text')
 
             if(self.spans.length > 0) {
-                self.highlightSentence() // start highlighting
+                // start highlighting
+                self.highlightSentence()
+                // hide dialog box
+                self.dialog_box.style.display = 'none'
             } else {
-                dialog_msg.innerHTML = "Found no text to read!"
+                self.setDialogMsg("Found no sentences to read!")
+                self.closeWindow()
             }
-
-            // hide popup
-            dialog.style.display = 'none'
         }
 
-        reader.style.display = "block"
+        this.page_reader.style.display = "block"
     },
 
+    /*
+     * prepareReadingWindow
+     *
+     * Creates the following elements:
+     * > Main window for the reader (this.page_reader, id="PAGE_READER")
+     * > IFrame for the content (this.page_reader_iframe, id="PAGE_READER_IFRAME")
+     */
     prepareReadingWindow: function() {
-        var reader = document.createElement("div")
-        reader.id = "PAGE_READER"
-        reader.style.display = "none"
-        reader.style.width = this.config.geometry.width
-        reader.style.height = this.config.geometry.height
-        reader.style.top = this.config.geometry.top
-        reader.style.left = this.config.geometry.left
-        reader.closeMyself = function() {
-            this.style.display = "none"
-        }
+        this.page_reader = document.createElement("div")
+        this.page_reader.id = "PAGE_READER"
+        this.page_reader.style.display = "none"
+        this.page_reader.style.width = this.config.geometry.width
+        this.page_reader.style.height = this.config.geometry.height
+        this.page_reader.style.top = this.config.geometry.top
+        this.page_reader.style.left = this.config.geometry.left
 
-        var iframe = document.createElement("iframe")
-        iframe.id = "PAGE_READER_IFRAME"
-        iframe.scrolling = "no"
-        reader.appendChild(iframe)
+        this.page_reader_iframe = document.createElement("iframe")
+        this.page_reader_iframe.id = "PAGE_READER_IFRAME"
+        this.page_reader_iframe.scrolling = "no"
+        this.page_reader.appendChild(this.page_reader_iframe)
 
-        document.getElementsByTagName('body')[0].appendChild(reader)
+        document.getElementsByTagName('body')[0].appendChild(this.page_reader)
     },
 
+    /*
+     * prepareMessageDialog
+     *
+     * Creates the following elements:
+     * > Modal dialog box (this.dialog_box, id="PAGE_READER_DIALOG")
+     * > Message displayed in dialog box (this.dialog_msg, id="PAGE_READER_DIALOG_MSG")
+     */
     prepareMessageDialog: function() {
-        var dialog = document.createElement("div")
-        dialog.id = "PAGE_READER_DIALOG"
-        dialog.className = "modal fade"
-        dialog.style.display = "none"
+        this.dialog_box = document.createElement("div")
+        this.dialog_box.id = "PAGE_READER_DIALOG"
+        this.dialog_box.className = "modal fade"
+        this.dialog_box.style.display = "none"
 
         var div = document.createElement("div")
         div.className = "modal-dialog modal-sm"
-        dialog.appendChild(div)
+        this.dialog_box.appendChild(div)
 
         var modal_content = document.createElement("div")
         modal_content.className = "modal-content"
@@ -201,41 +197,40 @@ Module.register("MMM-PageReader", {
         modal_body.className = "modal-body"
         modal_content.appendChild(modal_body)
 
-        var p = document.createElement("p")
-        p.id = "PAGE_READER_DIALOG_MSG"
-        modal_body.appendChild(p)
+        this.dialog_msg = document.createElement("p")
+        this.dialog_msg.id = "PAGE_READER_DIALOG_MSG"
+        modal_body.appendChild(this.dialog_msg)
 
         var loader = document.createElement("div")
         loader.className = "loader"
         modal_body.appendChild(loader)
 
-        document.getElementsByTagName('body')[0].appendChild(dialog)
+        document.getElementsByTagName('body')[0].appendChild(this.dialog_box)
     },
 
     closeWindow: function() {
         if(this.timeout) clearTimeout(this.timeout)
-        var reader = document.getElementById("PAGE_READER")
-        reader.closeMyself()
-        var iframe = document.getElementById("PAGE_READER_IFRAME")
-        iframe.src = null
-        iframe.onload = null
+        // hide page reader and dialog box
+        this.page_reader.style.display = "none"
+        this.dialog_box.style.display = "none"
+        // reset iframe
+        this.page_reader_iframe.src = null
+        this.page_reader_iframe.onload = null
         this.reset()
+    },
+
+    setDialogMsg: function(text) {
+        this.dialog_msg.innerHTML = text
+        this.log(text)
     },
 
     /*
      * parseSentences
      *
-     * Search 'doc' for tags of type 'tagname'.  For each matching node,
-     * split into sentences and wrap each sentence in <span> nodes of class
-     * 'MMM-wrapped-text'
+     * Split each node into sentences and wrap each sentence in <span> nodes
+     * of class 'MMM-wrapped-text'
      */
-    parseSentences: function(doc, tagname="p") {
-        var nodes = doc.getElementsByTagName(tagname)
-        if(!nodes) {
-            this.log("No nodes of type: " + tagname)
-            return
-        }
-
+    parseSentences: function(nodes) {
         var count = 0
         for(var i = 0; i < nodes.length; i++) {
             var text = nodes[i].textContent.trim()
@@ -259,7 +254,7 @@ Module.register("MMM-PageReader", {
             nodes[i].innerHTML = result
         }
 
-        this.log(`Parsed ${count} sentences from tag type '${tagname}'`)
+        this.log(`Parsed ${count} sentences`)
     },
 
     /*
@@ -282,8 +277,7 @@ Module.register("MMM-PageReader", {
 
         this.spans[this.current_span_index].setAttribute("class", "highlight") 
         var pos = this.getPositionOfElement(this.spans[this.current_span_index])
-        var iframe = document.getElementById("PAGE_READER_IFRAME")
-        iframe.contentWindow.scrollTo(0, pos.y)
+        this.page_reader_iframe.contentWindow.scrollTo(0, pos.y)
 
         if(this.config.timeout > 0) {
             this.timeout = setTimeout(()=>{

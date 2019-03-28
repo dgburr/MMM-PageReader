@@ -1,7 +1,7 @@
 # MMM-PageReader
 
 ## Overview
-`MMM-PageReader` is a MagicMirror² Module for reading web content.  It loads a specified URL, highlights each sentence in turn and then closes.  
+`MMM-PageReader` is a MagicMirror² Module for reading web content.  It loads a specified URL into a HTML window, highlights each sentence in turn and then closes the window.
 
 `MMM-PageReader` can be used for two different use cases:
 
@@ -26,8 +26,8 @@ Default configuration:
         },
         html: {
             tags: [ 'p', 'h1', 'h2', 'h3', 'h4', 'li' ], // list of tags to parse sentences from
-            regions: (url) => { // return list of regions to parse sentences from
-                return null
+            regions: (url) => { // a list of query selectors to parse sentences from
+                return null // parse all regions
             },
             transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
             },
@@ -87,14 +87,16 @@ config: {
 ```
 
 ## Regions
-Most websites contain some elements which you may wish to skip.  The `regions` parameter can be used to restrict sentence highlighting to specific areas.  For example, to limit highlighting of any pages from 'www.example.com' to the sentences contained in the 'content' area:
+Some websites contain elements which you may wish to skip during reading.  The `regions` parameter can be used to restrict sentence highlighting to specific elements in the DOM.  This parameter allows the user to specify a function which returns a list of criteria in the format accepted by `querySelectorAll()`.
+
+For example, to limit highlighting of pages from 'www.example.com' to the sentences contained within a 'div' element named 'content':
 
 ```javascript
 config: {
     html: {
         regions: (url) => {
             if(url.indexOf("www.example.com") != -1) {
-                return [ "content" ]
+                return [ 'div[class^="content"]' ]
             }
             return null
         }
