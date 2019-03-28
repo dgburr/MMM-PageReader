@@ -8,21 +8,34 @@
 Module.register("MMM-PageReader", {
     defaults: {
         highlight: 'background-color:red;', // CSS to be applied to highlighted sentences
-        width: "100%",  // width of page reading window (px or %)
-        height: "100%", // height of page reading window (px or %)
-        left: "0",      // X position of page reading window (px)
-        top: "0",       // Y position of page reading window (px)
         timeout: 1000,  // amount of time (in ms) to wait before moving to the next sentence.  If set to 0, waits for a PAGE_READER_NEXT event
         notification: null, // if defined, a notification with this name (and payload containing text) will be sent for each sentence
-        transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
+        geometry: {
+            width: "100%",  // width of page reading window (px or %)
+            height: "100%", // height of page reading window (px or %)
+            left: "0",      // X position of page reading window (px)
+            top: "0",       // Y position of page reading window (px)
         },
+        html: {
+            tags: [ 'p', 'h1', 'h2', 'h3', 'h4', 'li' ], // list of tags to parse sentences from
+            regions: (url) => { // return a list of regions to parse sentences from
+                return null // parse all regions
+            },
+            transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
+            },
+        }
     },
 
     getStyles: function() {
         return ['MMM-PageReader.css']
     },
 
-   start: function() {
+    start: function() {
+        this.config = this.configAssignment({}, this.defaults, this.config)
+        this.reset()
+    },
+
+    reset: function() {
         this.paused = false
         this.current_span_index = 0
         this.spans = null
@@ -32,7 +45,8 @@ Module.register("MMM-PageReader", {
     notificationReceived: function(notification, payload, sender) {
         switch(notification) {
             case "DOM_OBJECTS_CREATED":
-                this.prepareWindow()
+                this.prepareReadingWindow()
+                this.prepareMessageDialog()
                 break
             case "PAGE_READER_LOAD":
                 this.sendSocketNotification("PROXY_URL", payload)
@@ -65,6 +79,12 @@ Module.register("MMM-PageReader", {
 
     socketNotificationReceived: function(noti, payload) {
         if(noti == "PROXIED_URL") {
+            var dialog = document.getElementById("PAGE_READER_DIALOG")
+            dialog.style.display = "block"
+
+            var dialog_msg = document.getElementById("PAGE_READER_DIALOG_MSG")
+            dialog_msg.innerHTML = "Loading " + payload
+
             this.displayWindow(payload)
         }
     },
@@ -73,6 +93,10 @@ Module.register("MMM-PageReader", {
         var self = this
 
         var iframe = document.getElementById("PAGE_READER_IFRAME")
+        var reader = document.getElementById("PAGE_READER")
+        var dialog = document.getElementById("PAGE_READER_DIALOG")
+        var dialog_msg = document.getElementById("PAGE_READER_DIALOG_MSG")
+
         iframe.src = url
         iframe.onload = function() {
             var doc = iframe.contentDocument || iframe.contentWindow.document
@@ -84,43 +108,108 @@ Module.register("MMM-PageReader", {
             doc.head.appendChild(style)
 
             // execute (optional) HTML transformation
-            if(self.config.transform && typeof self.config.transform == "function") {
+            if(self.config.html.transform && typeof self.config.html.transform == "function") {
+                dialog_msg.innerHTML = "Applying transform"
                 try {
-                    self.config.transform(url, doc)
+                    self.config.html.transform(url, doc)
                 } catch(e) {
-                    this.log("Transform failed: " + e)
+                    self.log("Transform failed: " + e)
                 }
             }
 
+            // determine list of regions to parse
+            var regions = [ doc ]
+            if(self.config.html.regions && typeof self.config.html.regions == "function") {
+                dialog_msg.innerHTML = "Finding regions"
+                try {
+                    var list = self.config.html.regions(url)
+                    if(list) {
+                        regions = []
+                        list.forEach(region => {
+                            var node = doc.getElementsByClassName(region)
+                            if(node) regions.push(node)
+                        })
+                    }
+                } catch(e) {
+                    self.log("Regions failed: " + e)
+                }
+            }
+
+            var msg = "Got " + regions.length + " regions: " + regions
+            dialog_msg.innerHTML = msg
+            self.log(msg)
+
             // wrap sentences in spans of class 'MMM-wrapped-text'
-            self.parseSentences(doc)
+            regions.forEach(region => {
+                self.config.html.tags.forEach(tag => {
+                    self.parseSentences(region, tag)
+                })
+            })
+
             // get results of parse
             self.current_span_index = 0
             self.spans = doc.querySelectorAll('span.MMM-wrapped-text')
-            // start highlighting
-            self.highlightSentence()
+
+            if(self.spans.length > 0) {
+                self.highlightSentence() // start highlighting
+            } else {
+                dialog_msg.innerHTML = "Found no text to read!"
+            }
+
+            // hide popup
+            dialog.style.display = 'none'
         }
-        var reader = document.getElementById("PAGE_READER")
+
         reader.style.display = "block"
     },
 
-    prepareWindow: function() {
+    prepareReadingWindow: function() {
         var reader = document.createElement("div")
         reader.id = "PAGE_READER"
         reader.style.display = "none"
-        reader.style.width = this.config.width
-        reader.style.height = this.config.height
-        reader.style.top = this.config.top
-        reader.style.left = this.config.left
+        reader.style.width = this.config.geometry.width
+        reader.style.height = this.config.geometry.height
+        reader.style.top = this.config.geometry.top
+        reader.style.left = this.config.geometry.left
         reader.closeMyself = function() {
             this.style.display = "none"
         }
+
         var iframe = document.createElement("iframe")
         iframe.id = "PAGE_READER_IFRAME"
         iframe.scrolling = "no"
-
         reader.appendChild(iframe)
+
         document.getElementsByTagName('body')[0].appendChild(reader)
+    },
+
+    prepareMessageDialog: function() {
+        var dialog = document.createElement("div")
+        dialog.id = "PAGE_READER_DIALOG"
+        dialog.className = "modal fade"
+        dialog.style.display = "none"
+
+        var div = document.createElement("div")
+        div.className = "modal-dialog modal-sm"
+        dialog.appendChild(div)
+
+        var modal_content = document.createElement("div")
+        modal_content.className = "modal-content"
+        div.appendChild(modal_content)
+
+        var modal_body = document.createElement("div")
+        modal_body.className = "modal-body"
+        modal_content.appendChild(modal_body)
+
+        var p = document.createElement("p")
+        p.id = "PAGE_READER_DIALOG_MSG"
+        modal_body.appendChild(p)
+
+        var loader = document.createElement("div")
+        loader.className = "loader"
+        modal_body.appendChild(loader)
+
+        document.getElementsByTagName('body')[0].appendChild(dialog)
     },
 
     closeWindow: function() {
@@ -130,24 +219,26 @@ Module.register("MMM-PageReader", {
         var iframe = document.getElementById("PAGE_READER_IFRAME")
         iframe.src = null
         iframe.onload = null
-        this.start()
+        this.reset()
     },
 
     /*
      * parseSentences
      *
-     * Search for paragraphs (<p> nodes).  For each paragraph, split into
-     * sentences and wrap in <span> nodes of class 'MMM-wrapped-text'
+     * Search 'doc' for tags of type 'tagname'.  For each matching node,
+     * split into sentences and wrap each sentence in <span> nodes of class
+     * 'MMM-wrapped-text'
      */
-    parseSentences: function(doc) {
-        var paragraphs = doc.getElementsByTagName("p")
-        if(!paragraphs) {
-            this.log("No paragraphs")
+    parseSentences: function(doc, tagname="p") {
+        var nodes = doc.getElementsByTagName(tagname)
+        if(!nodes) {
+            this.log("No nodes of type: " + tagname)
             return
         }
+
         var count = 0
-        for(var i = 0; i < paragraphs.length; i++) {
-            var text = paragraphs[i].textContent.trim()
+        for(var i = 0; i < nodes.length; i++) {
+            var text = nodes[i].textContent.trim()
             var result = []
             function add(sentence) {
                 result += "<span class='MMM-wrapped-text'>" + sentence + "</span>"
@@ -165,10 +256,10 @@ Module.register("MMM-PageReader", {
                 }
             }
 
-            paragraphs[i].innerHTML = result
+            nodes[i].innerHTML = result
         }
 
-        this.log("Parsed " + count + " sentences")
+        this.log(`Parsed ${count} sentences from tag type '${tagname}'`)
     },
 
     /*
@@ -185,7 +276,7 @@ Module.register("MMM-PageReader", {
 
         if(this.config.notification) {
             var text = this.spans[this.current_span_index].innerHTML
-            text = text.replace("&nbsp;", ' ')
+            text = this.unencodeHTML(text)
             this.sendNotification(this.config.notification, text)
         }
 
@@ -226,8 +317,40 @@ Module.register("MMM-PageReader", {
                 h: h}
     },
 
+    configAssignment : function (result) {
+        var stack = Array.prototype.slice.call(arguments, 1)
+        var item
+        var key
+        while(stack.length) {
+            item = stack.shift()
+            for (key in item) {
+                if(item.hasOwnProperty(key)) {
+                    if(typeof result[key] === 'object' && result[key] && Object.prototype.toString.call(result[key]) !== '[object Array]') {
+                        if (typeof item[key] === 'object' && item[key] !== null) {
+                            result[key] = this.configAssignment({}, result[key], item[key])
+                        } else {
+                            result[key] = item[key]
+                        }
+                    } else {
+                        result[key] = item[key]
+                    }
+                }
+            }
+        }
+        return result
+    },
+
+    unencodeHTML: function(escapedHtml) {
+        var elem = document.createElement('div')
+        elem.innerHTML = escapedHtml
+        var result = ''
+        for(var i = 0; i < elem.childNodes.length; ++i) {
+            result = result + elem.childNodes[i].nodeValue
+        }
+        return result
+    },
+
     log: function(msg) {
         this.sendSocketNotification("LOG", msg)
     }
-
 })

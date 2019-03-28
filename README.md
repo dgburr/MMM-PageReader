@@ -16,15 +16,23 @@ Default configuration:
     module: "MMM-PageReader",
     config: {
         highlight: 'background-color:red;', // CSS to be applied to highlighted sentences
-        width: "100%",  // width of page reading window (px or %)
-        height: "100%", // height of page reading window (px or %)
-        left: "0",      // X position of page reading window (px)
-        top: "0",       // Y position of page reading window (px)
         timeout: 1000,  // amount of time (in ms) to wait before moving to the next sentence.  If set to 0, waits for a PAGE_READER_NEXT event
         notification: null, // if defined, a notification with this name (and payload containing text) will be sent for each sentence
-        transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
+        geometry: {
+            width: "100%",  // width of page reading window (px or %)
+            height: "100%", // height of page reading window (px or %)
+            left: "0",      // X position of page reading window (px)
+            top: "0",       // Y position of page reading window (px)
         },
-    },
+        html: {
+            tags: [ 'p', 'h1', 'h2', 'h3', 'h4', 'li' ], // list of tags to parse sentences from
+            regions: (url) => { // return list of regions to parse sentences from
+                return null
+            },
+            transform: (url, doc) => { // custom HTML transformation rule to be applied after loading
+            },
+        }
+    }
 }
 ```
 
@@ -70,8 +78,27 @@ This functionality is useful in case the source URL shows some kind of popup whi
 
 ```javascript
 config: {
-    transform: (url, doc) => {
-        doc.getElementsByClassName("annoying-popup")[0].style.display = 'none'
+    html: {
+        transform: (url, doc) => {
+            doc.getElementsByClassName("annoying-popup")[0].style.display = 'none'
+        }
     }
 }
 ```
+
+## Regions
+Most websites contain some elements which you may wish to skip.  The `regions` parameter can be used to restrict sentence highlighting to specific areas.  For example, to limit highlighting of any pages from 'www.example.com' to the sentences contained in the 'content' area:
+
+```javascript
+config: {
+    html: {
+        regions: (url) => {
+            if(url.indexOf("www.example.com") != -1) {
+                return [ "content" ]
+            }
+            return null
+        }
+    }
+}
+```
+Note that returning `null` means that no restrictions will be applied, i.e. all sentences will be highlighted.
