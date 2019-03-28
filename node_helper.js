@@ -29,6 +29,7 @@ module.exports = NodeHelper.create({
         request({url: url, method: "GET"}, (error, response, body)=> {
             if(error) {
                 this.log("Cannot open URL: " + url)
+                this.sendSocketNotification("PROXY", { orig: url })
             } else {
                 var url_obj = new URL(url)
                 var jsdom = new JSDOM(body)

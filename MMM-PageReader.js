@@ -49,6 +49,8 @@ Module.register("MMM-PageReader", {
                 this.prepareMessageDialog()
                 break
             case "PAGE_READER_LOAD":
+                this.dialog_box.style.display = "block"
+                this.setDialogMsg("Loading " + payload)
                 this.sendSocketNotification("PROXY_URL", payload)
                 break
             case "PAGE_READER_NEXT":
@@ -79,10 +81,13 @@ Module.register("MMM-PageReader", {
 
     socketNotificationReceived: function(notification, payload) {
         if(notification == "PROXY") {
-            this.dialog_box.style.display = "block"
-            this.setDialogMsg("Loading " + payload.orig)
-
-            this.displayWindow(payload.orig, payload.proxy)
+            if(payload.proxy) { // success!
+                this.displayWindow(payload.orig, payload.proxy)
+            } else {
+                // update message and autoclose after 2 seconds
+                this.setDialogMsg("Failed to load URL " + payload.orig)
+                setTimeout(()=>{ this.closeWindow() }, 2000)
+            }
         }
     },
 
@@ -126,7 +131,8 @@ Module.register("MMM-PageReader", {
             self.setDialogMsg("Parsing sentences")
             regions.forEach(region => {
                 self.config.html.tags.forEach(tag => {
-                    self.parseSentences(doc.querySelectorAll(`${region} ${tag}`))
+                    var num = self.parseSentences(doc.querySelectorAll(`${region} ${tag}`))
+                    self.log(`Search for '${region} ${tag}' returned ${num} sentences`)
                 })
             })
 
@@ -254,7 +260,7 @@ Module.register("MMM-PageReader", {
             nodes[i].innerHTML = result
         }
 
-        this.log(`Parsed ${count} sentences`)
+        return count
     },
 
     /*
