@@ -77,20 +77,20 @@ Module.register("MMM-PageReader", {
         return document.createElement("div")
     },
 
-    socketNotificationReceived: function(noti, payload) {
-        if(noti == "PROXIED_URL") {
+    socketNotificationReceived: function(notification, payload) {
+        if(notification == "PROXY") {
             this.dialog_box.style.display = "block"
-            this.setDialogMsg("Loading " + payload)
+            this.setDialogMsg("Loading " + payload.orig)
 
-            this.displayWindow(payload)
+            this.displayWindow(payload.orig, payload.proxy)
         }
     },
 
-    displayWindow: function(url) {
+    displayWindow: function(url_orig, url_proxied) {
         var self = this
         var iframe = this.page_reader_iframe
 
-        iframe.src = url
+        iframe.src = url_proxied
         iframe.onload = function() {
             var doc = iframe.contentDocument || iframe.contentWindow.document
 
@@ -104,7 +104,7 @@ Module.register("MMM-PageReader", {
             if(self.config.html.transform && typeof self.config.html.transform == "function") {
                 self.setDialogMsg("Applying HTML transformation")
                 try {
-                    self.config.html.transform(url, doc)
+                    self.config.html.transform(url_orig, doc)
                 } catch(e) {
                     self.log("Transform failed: " + e)
                 }
@@ -114,7 +114,7 @@ Module.register("MMM-PageReader", {
             var regions = []
             if(self.config.html.regions && typeof self.config.html.regions == "function") {
                 try {
-                    regions = self.config.html.regions(url)
+                    regions = self.config.html.regions(url_orig)
                 } catch(e) {
                     self.log("Failed to get regions: " + e)
                 }

@@ -28,19 +28,19 @@ module.exports = NodeHelper.create({
                 this.log("Cannot open URL: " + url)
             } else {
                 this.detail = body
-                this.proxyServe()
+                this.proxyServe(url)
             }
         })
     },
 
-    proxyServe: function() {
+    proxyServe: function(url) {
         this.expressApp.use(bodyParser.json())
         this.expressApp.use(bodyParser.urlencoded({extended: true}))
         this.expressApp.get("/proxied_url", (req, res) => {
             var html = this.detail
             res.status(200).send(html)
         })
-        this.sendSocketNotification("PROXIED_URL", "/proxied_url")
+        this.sendSocketNotification("PROXY", { orig: url, proxy: "/proxied_url" })
     },
 
     log: function(msg) {
