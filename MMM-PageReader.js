@@ -31,6 +31,8 @@ Module.register("MMM-PageReader", {
     },
 
     start: function() {
+        Log.info(`Starting module: ${this.name}`)
+
         this.config = this.configAssignment({}, this.defaults, this.config)
         this.reset()
     },
@@ -105,36 +107,10 @@ Module.register("MMM-PageReader", {
             style.innerHTML = 'span.highlight {' + self.config.highlight + '}'
             doc.head.appendChild(style)
 
-            // execute (optional) HTML transformation
-            if(self.config.html.transform && typeof self.config.html.transform == "function") {
-                self.setDialogMsg("Applying HTML transformation")
-                try {
-                    self.config.html.transform(url_orig, doc)
-                } catch(e) {
-                    self.log("Transform failed: " + e)
-                }
-            }
-
-            // determine list of regions to parse
-            var regions = []
-            if(self.config.html.regions && typeof self.config.html.regions == "function") {
-                try {
-                    regions = self.config.html.regions(url_orig)
-                } catch(e) {
-                    self.log("Failed to get regions: " + e)
-                }
-            }
-
-            if(regions.length == 0) regions.push('')
-
-            // parse sentences
+            self.setDialogMsg("Applying HTML transformations")
+            self.applyTransformations(url_orig, doc)
             self.setDialogMsg("Parsing sentences")
-            regions.forEach(region => {
-                self.config.html.tags.forEach(tag => {
-                    var num = self.parseSentences(doc.querySelectorAll(`${region} ${tag}`))
-                    self.log(`Search for '${region} ${tag}' returned ${num} sentences`)
-                })
-            })
+            self.parseRegions(url_orig, doc)
 
             // get results of parse
             self.current_span_index = 0
@@ -220,7 +196,7 @@ Module.register("MMM-PageReader", {
         this.page_reader.style.display = "none"
         this.dialog_box.style.display = "none"
         // reset iframe
-        this.page_reader_iframe.src = null
+        this.page_reader_iframe.src = ''
         this.page_reader_iframe.onload = null
         this.reset()
     },
@@ -228,6 +204,65 @@ Module.register("MMM-PageReader", {
     setDialogMsg: function(text) {
         this.dialog_msg.innerHTML = text
         this.log(text)
+    },
+
+    /*
+     * applyTransformations
+     *
+     * Apply transformation to HTML
+     */
+    applyTransformations: function(url, doc) {
+        // change any <img>s pointing to window.location to the 'url' host
+        var target = new URL(url)
+        doc.querySelectorAll('img').forEach(img => {
+            if(img.src) {
+                var obj = new URL(img.src)
+                if(obj.protocol == window.location.protocol && obj.host == window.location.host) {
+                    obj.protocol = target.protocol
+                    obj.hostname = target.hostname
+                    obj.port = target.port || '80'
+                    img.src = obj.href
+                }
+            }
+        })
+
+        // execute (optional) HTML transformation
+        if(this.config.html.transform && typeof this.config.html.transform == "function") {
+            this.setDialogMsg("Applying HTML transformation")
+            try {
+                this.config.html.transform(url, doc)
+            } catch(e) {
+                this.log("Transform failed: " + e)
+            }
+        }
+    },
+
+    /*
+     * parseRegions
+     *
+     * Determine the list of regions to parse and call parseSentences()
+     * for each region
+     */
+    parseRegions: function(url, doc) {
+        // determine list of regions to parse
+        var regions = []
+        if(this.config.html.regions && typeof this.config.html.regions == "function") {
+            try {
+                regions = this.config.html.regions(url)
+            } catch(e) {
+                this.log("Failed to get regions: " + e)
+            }
+        }
+
+        if(regions.length == 0) regions.push('')
+
+        // parse sentences
+        regions.forEach(region => {
+            this.config.html.tags.forEach(tag => {
+                var num = this.parseSentences(doc.querySelectorAll(`${region} ${tag}`))
+                this.log(`Search for '${region} ${tag}' returned ${num} sentences`)
+            })
+        })
     },
 
     /*
@@ -275,15 +310,15 @@ Module.register("MMM-PageReader", {
             return
         }
 
+        this.spans[this.current_span_index].setAttribute("class", "highlight")
+        var pos = this.getPositionOfElement(this.spans[this.current_span_index])
+        this.page_reader_iframe.contentWindow.scrollTo(0, pos.y)
+
         if(this.config.notification) {
             var text = this.spans[this.current_span_index].innerHTML
             text = this.unencodeHTML(text)
             this.sendNotification(this.config.notification, text)
         }
-
-        this.spans[this.current_span_index].setAttribute("class", "highlight") 
-        var pos = this.getPositionOfElement(this.spans[this.current_span_index])
-        this.page_reader_iframe.contentWindow.scrollTo(0, pos.y)
 
         if(this.config.timeout > 0) {
             this.timeout = setTimeout(()=>{

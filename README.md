@@ -6,7 +6,7 @@
 `MMM-PageReader` can be used for two different use cases:
 
 1. Automatic (timed) scrolling
-2. Event-driven scrolling (useful for interacting with a Text-to-Speech engine)
+2. Event-driven scrolling (useful for interacting with a Text-to-Speech engine, e.g. `MMM-Polly` or `MMM-Speech-Dispatcher`)
 
 ## Configuration
 Default configuration:

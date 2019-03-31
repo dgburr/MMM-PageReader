@@ -7,15 +7,16 @@
 
 const request = require("request")
 const bodyParser = require("body-parser")
-const jsdom = require("jsdom")
-const { JSDOM } = jsdom
-const URL = require('url').URL
 
 var NodeHelper = require("node_helper")
 
 module.exports = NodeHelper.create({
-    socketNotificationReceived: function(noti, payload) {
-        switch(noti) {
+    start: function() {
+        console.log(`Starting node helper for: ${this.name}`)
+    },
+
+    socketNotificationReceived: function(notification, payload) {
+        switch(notification) {
             case "PROXY_URL":
                 this.requestURL(payload)
                 break
@@ -31,15 +32,7 @@ module.exports = NodeHelper.create({
                 this.log("Cannot open URL: " + url)
                 this.sendSocketNotification("PROXY", { orig: url })
             } else {
-                var url_obj = new URL(url)
-                var jsdom = new JSDOM(body)
-                // change any relative URLs in <img> tags to absolute
-                jsdom.window.document.querySelectorAll('img').forEach(img => {
-                    if(img.src && img.src.length > 0 && img.src[0] == '/') {
-                        img.src = url_obj.origin + img.src
-                    }
-                })
-                this.result = jsdom.serialize()
+                this.result = body
                 this.proxyServe(url)
             }
         })
@@ -58,5 +51,4 @@ module.exports = NodeHelper.create({
     log: function(msg) {
         console.log("[MMM-PageReader] " + msg)
     },
-
 })
