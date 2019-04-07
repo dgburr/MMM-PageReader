@@ -123,7 +123,7 @@ Module.register("MMM-PageReader", {
                 self.dialog_box.style.display = 'none'
             } else {
                 self.setDialogMsg("Found no sentences to read!")
-                self.closeWindow()
+                setTimeout(()=>{ self.closeWindow() }, 2000)
             }
         }
 
